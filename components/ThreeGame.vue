@@ -1,12 +1,15 @@
 <template>
   <div ref="container">
     <div class="hud">
-      <row class="bg-white" justify="center" align="center">
-        <h5 class="text-black font-weight-bold border-xl border-black border-opacity-100 bg-white">
+      <v-row class="bg-white mr-auto ml-auto" style="width: max-content; height: max-content">
+        <h5 class="text-black font-weight-bold px-4 border-lg border-black border-opacity-100 bg-white">
           <v-icon color="red">mdi-heart</v-icon> Vidas: {{ gameState.lives }}
+        </h5>
+
+        <h5 class="text-black font-weight-bold border-lg px-4 border-black border-opacity-100 bg-white">
           <v-icon color="yellow">mdi-star</v-icon> Pontos: {{ gameState.points }}
         </h5>
-      </row>
+      </v-row>
     </div>
   </div>
 </template>
@@ -16,11 +19,11 @@ import { ref, onMounted, onUnmounted, reactive } from 'vue';
 import * as THREE from 'three';
 import Swal from 'sweetalert2';
 
-
-
 const container = ref(null);
 let scene, camera, renderer, animationFrameId;
 let backgroundPlane;
+
+
 
 // Objeto reativo para o estado do jogo
 const gameState = reactive({
@@ -88,72 +91,86 @@ onMounted(() => {
   };
 
   const animate = () => {
-    animationFrameId = requestAnimationFrame(animate);
+  animationFrameId = requestAnimationFrame(animate);
 
-    // Atualiza o plano de fundo para o movimento contínuo
-    if (backgroundPlane) {
-      backgroundPlane.material.map.offset.y += 0.01;
-      if (backgroundPlane.material.map.offset.y >= 1) {
-        backgroundPlane.material.map.offset.y = 0;
-      }
+  // Atualiza o plano de fundo para o movimento contínuo
+  if (backgroundPlane) {
+    backgroundPlane.material.map.offset.y += 0.01;
+    if (backgroundPlane.material.map.offset.y >= 1) {
+      backgroundPlane.material.map.offset.y = 0;
     }
+  }
 
-    // Atualiza a posição dos obstáculos
-    obstacles.forEach((obstacle, index) => {
-      obstacle.position.y -= 0.05;
+  // Variável para evitar múltiplas perdas de vidas na mesma atualização
+  let lifeLost = false;
 
-      // Detecta colisão entre obstáculo e personagem
-      if (character.position.distanceTo(obstacle.position) < 1) {
+  // Atualiza a posição dos obstáculos
+  obstacles.forEach((obstacle, index) => {
+    obstacle.position.y -= 0.05;
+
+    // Detecta colisão entre obstáculo e personagem
+    if (character.position.distanceTo(obstacle.position) < 1 && !lifeLost) {
+      lifeLost = true; // Marca que uma vida foi perdida
+      
+      // Verifica se ainda tem vidas
+      if (gameState.lives > 0) {
         gameState.lives -= 1; // Perde uma vida
-        scene.remove(obstacle); // Remove o obstáculo colidido
-        obstacles.splice(index, 1);
-
-        // Verifica se as vidas acabaram
-        if (gameState.lives <= 0) {
-          // Pausa a animação e a criação de obstáculos
-          cancelAnimationFrame(animationFrameId);
-          clearInterval(obstacleInterval);
-
-          // Exibe o alerta
-          Swal.fire({
-            title: 'Acabaram suas vidas!',
-            text: 'Filha, comece novamente.',
-            icon: 'warning',
-            confirmButtonText: 'Jogar novamente'
-          }).then(() => {
-            // Reinicia as vidas e pontos
-            gameState.lives = 3;
-            gameState.points = 0;
-
-            // Retoma a animação e a criação de obstáculos
-            animate();
-            obstacleInterval = setInterval(createObstacle, 1000);
-          });
-          return; // Sai da função para evitar continuar a execução após reiniciar
-        }
       }
+      scene.remove(obstacle); // Remove o obstáculo colidido
+      obstacles.splice(index, 1);
 
-      // Remove obstáculos que saem da tela
-      if (obstacle.position.y < -5) {
-        scene.remove(obstacle);
-        obstacles.splice(index, 1);
-        gameState.points += 10; // Ganha pontos por evitar obstáculos
-      }
-    });
+      // Verifica se as vidas acabaram
+      if (gameState.lives <= 0) {
+        // Pausa a animação e a criação de obstáculos
+        cancelAnimationFrame(animationFrameId);
+        clearInterval(obstacleInterval);
 
-    // Atualiza o pulo do personagem
-    if (isJumping) {
-      character.position.y += jumpVelocity;
-      jumpVelocity -= 0.05;
-      if (character.position.y <= -5) {
-        character.position.y = -5;
-        isJumping = false;
-        jumpVelocity = 0;
+        // Exibe o alerta
+        Swal.fire({
+          title: 'Acabaram suas vidas!',
+          text: 'Filha, comece novamente.',
+          icon: 'warning',
+          confirmButtonText: 'Jogar novamente'
+        }).then(() => {
+          // Reinicia as vidas e pontos
+          gameState.lives = 3;
+          gameState.points = 0;
+
+          // Retoma a animação e a criação de obstáculos
+          animate();
+          obstacleInterval = setInterval(createObstacle, 1000);
+        });
+        return; // Sai da função para evitar continuar a execução após reiniciar
       }
     }
 
-    renderer.render(scene, camera);
-  };
+    // Remove obstáculos que saem da tela
+    if (obstacle.position.y < -5) {
+      scene.remove(obstacle);
+      obstacles.splice(index, 1);
+      gameState.points += 10; // Ganha pontos por evitar obstáculos
+      
+      // Verifica se a pontuação é um múltiplo de 250
+      if (gameState.points % 250 === 0) {
+        gameState.lives += 1; // Adiciona uma vida
+      }
+    }
+  });
+
+  // Atualiza o pulo do personagem
+  if (isJumping) {
+    character.position.y += jumpVelocity;
+    jumpVelocity -= 0.05;
+    if (character.position.y <= -5) {
+      character.position.y = -5;
+      isJumping = false;
+      jumpVelocity = 0;
+    }
+  }
+
+  renderer.render(scene, camera);
+};
+
 
   // Iniciar a criação de obstáculos
   obstacleInterval = setInterval(createObstacle, 1000);
@@ -163,32 +180,31 @@ onMounted(() => {
 
   // Movimento lateral e pulo do personagem
   container.value.addEventListener('click', (event) => {
-    const mouseX = (event.clientX / window.innerWidth) * 2 - 1;
-    character.position.x = Math.max(-2.5, Math.min(2.7, mouseX * 2));
+    // Converte as coordenadas do mouse para a posição do mundo 3D
+    const rect = container.value.getBoundingClientRect();
+    const mouseX = ((event.clientX - rect.left) / rect.width) * 2 - 1; // Normaliza para [-1, 1]
 
-    if (event.clientY < window.innerHeight / 2 && !isJumping) {
-      isJumping = true;
-      jumpVelocity = jumpHeight;
-    }
+
+    // Atualiza a posição x do personagem, garantindo que ele não ultrapasse os limites
+    character.position.x = Math.max(-2.5, Math.min(2.5, mouseX * 5)); // Multiplica por 5 para ajustar o movimento
   });
 
   const characterWidth = 1.2; // Largura do personagem
 
- // Durante a movimentação lateral
-window.addEventListener('keydown', (event) => {
-  // Calcule o limite direito e esquerdo
-  const rightLimit = (window.innerWidth / 2 / 100) - (characterWidth / 2);
-  const leftLimit = -(window.innerWidth / 2 / 100) + (characterWidth / 2);
+  // Durante a movimentação lateral
+  window.addEventListener('keydown', (event) => {
+    // Calcule o limite direito e esquerdo
+    const rightLimit = window.innerWidth / 2 / 100 - characterWidth / 2;
+    const leftLimit = -(window.innerWidth / 2 / 100) + characterWidth / 2;
 
-  if (event.key === 'ArrowRight') {
-    // Movimento para a direita
-    character.position.x = Math.min(rightLimit + characterWidth / 2, character.position.x + characterSpeed);
-  } else if (event.key === 'ArrowLeft') {
-    // Movimento para a esquerda
-    character.position.x = Math.max(leftLimit - characterWidth / 2, character.position.x - characterSpeed);
-  }
-});
-
+    if (event.key === 'ArrowRight') {
+      // Movimento para a direita
+      character.position.x = Math.min(rightLimit + characterWidth / 2, character.position.x + characterSpeed);
+    } else if (event.key === 'ArrowLeft') {
+      // Movimento para a esquerda
+      character.position.x = Math.max(leftLimit - characterWidth / 2, character.position.x - characterSpeed);
+    }
+  });
 
   // Ajuste de tamanho da tela
   window.addEventListener('resize', () => {
@@ -231,11 +247,5 @@ div {
   font-family: Arial, sans-serif;
   width: calc(100% - 20px); /* Ajusta a largura para garantir que não exceda os limites da viewport */
   overflow: hidden; /* Para evitar rolagem desnecessária */
-}
-
-.score-container {
-  display: flex;
-  flex-direction: column; /* Alinha os itens na vertical */
-  width: 100%;
 }
 </style>
