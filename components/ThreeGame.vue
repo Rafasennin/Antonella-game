@@ -1,13 +1,20 @@
 <template>
   <div ref="container">
     <div class="hud">
-      <v-row class="bg-white mr-auto ml-auto" style="width: max-content; height: max-content">
+      <v-row class="bg-transparent mr-auto ml-auto" style="width: max-content; height: auto" align="center">
+        <v-select
+          density="compact"
+          v-model="difficulty"
+          :items="difficultyOptions"
+            @update:modelValue="updateDifficulty"
+          class="text-black font-weight-bold border-lg border-black border-opacity-100 bg-white d-flex align-center justify-center"
+          style="width: auto; height: auto" />
         <h5 class="text-black font-weight-bold px-4 border-lg border-black border-opacity-100 bg-white">
-          <v-icon color="red">mdi-heart</v-icon> Vidas: {{ gameState.lives }}
+          <v-icon color="red" size="x-large">mdi-heart</v-icon> {{ gameState.lives }}
         </h5>
 
         <h5 class="text-black font-weight-bold border-lg px-4 border-black border-opacity-100 bg-white">
-          <v-icon color="yellow">mdi-star</v-icon> Pontos: {{ gameState.points }}
+          <v-icon color="yellow" size="x-large">mdi-star</v-icon> {{ gameState.points }}
         </h5>
       </v-row>
     </div>
@@ -19,10 +26,34 @@ import { ref, onMounted, onUnmounted, reactive } from 'vue';
 import * as THREE from 'three';
 import Swal from 'sweetalert2';
 
+// Dificuldade e opções de dificuldade
+const difficulty = ref('Fácil');
+const difficultyOptions = ref(['Fácil', 'Médio', 'Difícil']);
+
 const container = ref(null);
 let scene, camera, renderer, animationFrameId;
 let backgroundPlane;
+const obstacleSpeed = ref( 0.02);
+const baseObstacleCreationInterval = ref(75); // Intervalo base em milissegundos
 
+const updateDifficulty = () => {
+  console.log("Iniciou")
+  switch (difficulty.value) {
+    case 'Fácil':
+      baseObstacleCreationInterval.value = 75;
+      obstacleSpeed.value = 0.02;
+      break;
+    case 'Médio':
+      baseObstacleCreationInterval.value = 5;
+      obstacleSpeed.value = 0.05;
+      break;
+    case 'Difícil':
+      baseObstacleCreationInterval.value = 10;
+      obstacleSpeed.value = 0.08;
+      break;
+  }
+  console.log(`Dificuldade: ${difficulty.value}, Velocidade: ${obstacleSpeed.value}, Intervalo: ${obstacleCreationInterval()}`);
+};
 
 
 // Objeto reativo para o estado do jogo
@@ -39,6 +70,10 @@ let character,
   characterSpeed = 0.8;
 let obstacles = []; // Array para armazenar os obstáculos
 let obstacleInterval; // Intervalo para criar obstáculos
+
+
+// Calcula o intervalo de criação baseado na velocidade do obstáculo
+const obstacleCreationInterval = () => baseObstacleCreationInterval.value / obstacleSpeed.value;
 
 onMounted(() => {
   // Configuração da cena e da câmera
@@ -90,90 +125,98 @@ onMounted(() => {
     obstacles.push(obstacle);
   };
 
+  const originalColor = character.material.color.clone();
+
   const animate = () => {
-  animationFrameId = requestAnimationFrame(animate);
+    animationFrameId = requestAnimationFrame(animate);
 
-  // Atualiza o plano de fundo para o movimento contínuo
-  if (backgroundPlane) {
-    backgroundPlane.material.map.offset.y += 0.01;
-    if (backgroundPlane.material.map.offset.y >= 1) {
-      backgroundPlane.material.map.offset.y = 0;
-    }
-  }
-
-  // Variável para evitar múltiplas perdas de vidas na mesma atualização
-  let lifeLost = false;
-
-  // Atualiza a posição dos obstáculos
-  obstacles.forEach((obstacle, index) => {
-    obstacle.position.y -= 0.05;
-
-    // Detecta colisão entre obstáculo e personagem
-    if (character.position.distanceTo(obstacle.position) < 1 && !lifeLost) {
-      lifeLost = true; // Marca que uma vida foi perdida
-      
-      // Verifica se ainda tem vidas
-      if (gameState.lives > 0) {
-        gameState.lives -= 1; // Perde uma vida
-      }
-      scene.remove(obstacle); // Remove o obstáculo colidido
-      obstacles.splice(index, 1);
-
-      // Verifica se as vidas acabaram
-      if (gameState.lives <= 0) {
-        // Pausa a animação e a criação de obstáculos
-        cancelAnimationFrame(animationFrameId);
-        clearInterval(obstacleInterval);
-
-        // Exibe o alerta
-        Swal.fire({
-          title: 'Acabaram suas vidas!',
-          text: 'Filha, comece novamente.',
-          icon: 'warning',
-          confirmButtonText: 'Jogar novamente'
-        }).then(() => {
-          // Reinicia as vidas e pontos
-          gameState.lives = 3;
-          gameState.points = 0;
-
-          // Retoma a animação e a criação de obstáculos
-          animate();
-          obstacleInterval = setInterval(createObstacle, 1000);
-        });
-        return; // Sai da função para evitar continuar a execução após reiniciar
+    // Atualiza o plano de fundo para o movimento contínuo
+    if (backgroundPlane) {
+      backgroundPlane.material.map.offset.y += 0.01;
+      if (backgroundPlane.material.map.offset.y >= 1) {
+        backgroundPlane.material.map.offset.y = 0;
       }
     }
 
-    // Remove obstáculos que saem da tela
-    if (obstacle.position.y < -5) {
-      scene.remove(obstacle);
-      obstacles.splice(index, 1);
-      gameState.points += 10; // Ganha pontos por evitar obstáculos
-      
-      // Verifica se a pontuação é um múltiplo de 250
-      if (gameState.points % 250 === 0) {
-        gameState.lives += 1; // Adiciona uma vida
+    // Variável para evitar múltiplas perdas de vidas na mesma atualização
+    let lifeLost = false;
+
+    // Atualiza a posição dos obstáculos
+    obstacles.forEach((obstacle, index) => {
+      obstacle.position.y -= obstacleSpeed.value;
+
+      // Detecta colisão entre obstáculo e personagem
+      if (character.position.distanceTo(obstacle.position) < 1 && !lifeLost) {
+        lifeLost = true; // Marca que uma vida foi perdida
+
+        // Verifica se ainda tem vidas
+        if (gameState.lives > 0) {
+          gameState.lives -= 1; // Perde uma vida
+        }
+
+        // Muda a cor do personagem para indicar a colisão
+        character.material.color.set(0xff0000);
+        setTimeout(() => {
+          character.material.color.copy(originalColor); // Restaura a cor original após 1 segundo
+        }, 1000);
+
+        scene.remove(obstacle); // Remove o obstáculo colidido
+        obstacles.splice(index, 1);
+
+        // Verifica se as vidas acabaram
+        if (gameState.lives <= 0) {
+          // Pausa a animação e a criação de obstáculos
+          cancelAnimationFrame(animationFrameId);
+          clearInterval(obstacleInterval);
+
+          // Exibe o alerta
+          Swal.fire({
+            title: 'Acabaram suas vidas!',
+            text: 'Filha, comece novamente.',
+            icon: 'warning',
+            confirmButtonText: 'Jogar novamente'
+          }).then(() => {
+            // Reinicia as vidas e pontos
+            gameState.lives = 3;
+            gameState.points = 0;
+
+            // Retoma a animação e a criação de obstáculos
+            animate();
+            obstacleInterval = setInterval(createObstacle, obstacleCreationInterval());
+          });
+          return; // Sai da função para evitar continuar a execução após reiniciar
+        }
+      }
+
+      // Remove obstáculos que saem da tela
+      if (obstacle.position.y < -5) {
+        scene.remove(obstacle);
+        obstacles.splice(index, 1);
+        gameState.points += 10; // Ganha pontos por evitar obstáculos
+
+        // Verifica se a pontuação é um múltiplo de 250
+        if (gameState.points % 250 === 0) {
+          gameState.lives += 1; // Adiciona uma vida
+        }
+      }
+    });
+
+    // Atualiza o pulo do personagem
+    if (isJumping) {
+      character.position.y += jumpVelocity;
+      jumpVelocity -= 0.05;
+      if (character.position.y <= -5) {
+        character.position.y = -5;
+        isJumping = false;
+        jumpVelocity = 0;
       }
     }
-  });
 
-  // Atualiza o pulo do personagem
-  if (isJumping) {
-    character.position.y += jumpVelocity;
-    jumpVelocity -= 0.05;
-    if (character.position.y <= -5) {
-      character.position.y = -5;
-      isJumping = false;
-      jumpVelocity = 0;
-    }
-  }
-
-  renderer.render(scene, camera);
-};
-
+    renderer.render(scene, camera);
+  };
 
   // Iniciar a criação de obstáculos
-  obstacleInterval = setInterval(createObstacle, 1000);
+  obstacleInterval = setInterval(createObstacle, obstacleCreationInterval());
 
   // Inicia a animação
   animate();
@@ -183,7 +226,6 @@ onMounted(() => {
     // Converte as coordenadas do mouse para a posição do mundo 3D
     const rect = container.value.getBoundingClientRect();
     const mouseX = ((event.clientX - rect.left) / rect.width) * 2 - 1; // Normaliza para [-1, 1]
-
 
     // Atualiza a posição x do personagem, garantindo que ele não ultrapasse os limites
     character.position.x = Math.max(-2.5, Math.min(2.5, mouseX * 5)); // Multiplica por 5 para ajustar o movimento
